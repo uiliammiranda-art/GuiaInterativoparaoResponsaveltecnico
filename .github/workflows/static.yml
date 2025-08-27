@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Interativo para Responsável Técnico de Laboratório</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Harmony Neutrals -->
+    <!-- Application Structure Plan: A thematic dashboard SPA with six main modules: 'Painel de Bordo' (overview), 'Guia Regulatório' (interactive RDC comparison), 'Módulo de Qualidade' (interactive tools), 'Liderança & Desenvolvimento' (team management strategies), 'Módulos de Estudo' (a hub linking to dedicated pages), and 'Documentos e Normas' (a resource hub for official PDFs). This structure provides a clear, multi-level navigation, allowing users to easily access high-level summaries, detailed content, and primary source documents without cluttering a single view. -->
+    <!-- Visualization & Content Choices: 1. RDC Comparison -> Goal: Compare regulations -> Viz: Interactive accordion. 2. Westgard Rules -> Goal: Teach error patterns -> Viz: Levey-Jennings Chart. 3. Study Modules -> Goal: Present curriculum -> Viz: Hub page with cards linking to detail pages. 4. Document Hub -> Goal: Provide direct access to regulations -> Viz: Grid of cards with external links -> Interaction: Click to open PDF in new tab. Justification: This dedicated resource hub is a user-friendly way to provide direct access to essential, non-summarized regulatory documents. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF7;
+            color: #3D405B;
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-link.active, .nav-link:hover {
+            border-bottom-color: #81B29A;
+            color: #3D405B;
+        }
+        .card {
+            background-color: #FFFFFF;
+            border: 1px solid #E0E0E0;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+        }
+        .btn {
+            transition: all 0.3s ease;
+            border-radius: 0.5rem;
+        }
+        .btn-primary {
+            background-color: #81B29A;
+            color: #FFFFFF;
+        }
+        .btn-primary:hover {
+            background-color: #6a947d;
+        }
+        .btn-secondary {
+            background-color: #E07A5F;
+            color: #FFFFFF;
+        }
+        .btn-secondary:hover {
+            background-color: #c9674f;
+        }
+        .accordion-header {
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .accordion-header:hover {
+            background-color: #F4F1EA;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 50vh;
+        }
+        /* Modal Styles */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            color: #888;
+        }
+        .modal-close:hover {
+            color: #333;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-10 shadow-sm">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <h1 class="text-xl font-bold text-[#3D405B]">Painel do RT</h1>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#dashboard" class="nav-link active px-3 py-2 text-sm font-medium text-gray-500" onclick="switchTab('dashboard', this)">Painel de Bordo</a>
+                        <a href="#regulatory" class="nav-link px-3 py-2 text-sm font-medium text-gray-500" onclick="switchTab('regulatory', this)">Guia Regulatório</a>
+                        <a href="#quality" class="nav-link px-3 py-2 text-sm font-medium text-gray-500" onclick="switchTab('quality', this)">Módulo de Qualidade</a>
+                        <a href="#leadership" class="nav-link px-3 py-2 text-sm font-medium text-gray-500" onclick="switchTab('leadership', this)">Liderança</a>
+                        <a href="#study" class="nav-link px-3 py-2 text-sm font-medium text-gray-500" onclick="switchTab('study', this)">Módulos de Estudo</a>
+                        <a href="#documents" class="nav-link px-3 py-2 text-sm font-medium text-gray-500" onclick="switchTab('documents', this)">Documentos e Normas</a>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <select id="mobile-nav" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                        <option value="dashboard">Painel de Bordo</option>
+                        <option value="regulatory">Guia Regulatório</option>
+                        <option value="quality">Módulo de Qualidade</option>
+                        <option value="leadership">Liderança</option>
+                        <option value="study">Módulos de Estudo</option>
+                        <option value="documents">Documentos e Normas</option>
+                    </select>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- Painel de Bordo Section -->
+        <section id="dashboard" class="page-content">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold tracking-tight text-[#3D405B] sm:text-4xl">Guia Interativo para o Responsável Técnico</h2>
+                <p class="mt-4 text-lg leading-8 text-gray-600 max-w-3xl mx-auto">Uma ferramenta para navegar pelas complexidades da gestão laboratorial, qualidade e liderança.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div class="card p-6 flex flex-col items-center text-center">
+                    <div class="mb-4 text-4xl text-[#81B29A]">⚖️</div>
+                    <h3 class="text-xl font-semibold mb-2">Conformidade Regulatória</h3>
+                    <p class="text-gray-600 mb-4">Navegue pelas mudanças da RDC 302 para a RDC 786/2023 e entenda os pilares da ISO 15189.</p>
+                    <button class="btn btn-primary mt-auto px-4 py-2" onclick="switchTab('regulatory')">Explorar Guia</button>
+                </div>
+
+                <div class="card p-6 flex flex-col items-center text-center">
+                    <div class="mb-4 text-4xl text-[#E07A5F]">🔬</div>
+                    <h3 class="text-xl font-semibold mb-2">Gestão da Qualidade</h3>
+                    <p class="text-gray-600 mb-4">Domine as ferramentas essenciais, do CQI com Regras de Westgard ao ciclo de melhoria contínua.</p>
+                    <button class="btn btn-primary mt-auto px-4 py-2" onclick="switchTab('quality')">Acessar Módulo</button>
+                </div>
+
+                <div class="card p-6 flex flex-col items-center text-center">
+                    <div class="mb-4 text-4xl text-[#F2CC8F]">👥</div>
+                    <h3 class="text-xl font-semibold mb-2">Liderança e Equipe</h3>
+                    <p class="text-gray-600 mb-4">Desenvolva estratégias para gerenciar, motivar e capacitar sua equipe técnica de alta performance.</p>
+                    <button class="btn btn-primary mt-auto px-4 py-2" onclick="switchTab('leadership')">Ver Estratégias</button>
+                </div>
+                
+                <div class="card p-6 flex flex-col items-center text-center">
+                    <div class="mb-4 text-4xl text-[#8E8D8A]">🎓</div>
+                    <h3 class="text-xl font-semibold mb-2">Módulos de Estudo</h3>
+                    <p class="text-gray-600 mb-4">Aprofunde seus conhecimentos com um currículo completo sobre gestão, qualidade e conformidade.</p>
+                    <button class="btn btn-primary mt-auto px-4 py-2" onclick="switchTab('study')">Iniciar Estudo</button>
+                </div>
+
+                 <div class="card p-6 flex flex-col items-center text-center md:col-span-2 lg:col-span-1">
+                    <div class="mb-4 text-4xl text-[#B0A8B9]">📄</div>
+                    <h3 class="text-xl font-semibold mb-2">Documentos e Normas</h3>
+                    <p class="text-gray-600 mb-4">Acesse os textos completos das principais RDCs, NRs e manuais técnicos da área.</p>
+                    <button class="btn btn-primary mt-auto px-4 py-2" onclick="switchTab('documents')">Acessar Biblioteca</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Guia Regulatório Section -->
+        <section id="regulatory" class="page-content hidden">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold tracking-tight text-[#3D405B]">Guia Regulatório e Normativo</h2>
+                <p class="mt-4 text-lg leading-8 text-gray-600 max-w-3xl mx-auto">Compare as principais mudanças regulatórias e entenda os padrões de excelência.</p>
+            </div>
+            <div class="max-w-4xl mx-auto">
+                <h3 class="text-2xl font-semibold mb-6 text-center">Transição: RDC 302/2005 para RDC 786/2023</h3>
+                <div id="rdc-accordion" class="space-y-3">
+                </div>
+            </div>
+        </section>
+
+        <!-- Módulo de Qualidade Section -->
+        <section id="quality" class="page-content hidden">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold tracking-tight text-[#3D405B]">Módulo Interativo da Qualidade</h2>
+                <p class="mt-4 text-lg leading-8 text-gray-600 max-w-3xl mx-auto">Simule cenários de controle de qualidade e explore o ciclo de melhoria contínua.</p>
+            </div>
+            
+            <div class="card p-6 md:p-8 mb-12">
+                <h3 class="text-2xl font-semibold mb-2 text-center">Simulador de CQI: Regras de Westgard</h3>
+                <p class="text-center text-gray-600 mb-6">Clique nos botões para visualizar diferentes violações em um gráfico de Levey-Jennings.</p>
+                <div class="chart-container mb-6">
+                    <canvas id="westgardChart"></canvas>
+                </div>
+                <div class="flex flex-wrap justify-center gap-2 mb-6">
+                    <button class="btn btn-primary px-3 py-1.5 text-sm" onclick="updateChart('normal')">Normal</button>
+                    <button class="btn btn-secondary px-3 py-1.5 text-sm" onclick="updateChart('1_3s')">Regra 1₃ₛ</button>
+                    <button class="btn btn-secondary px-3 py-1.5 text-sm" onclick="updateChart('2_2s')">Regra 2₂ₛ</button>
+                    <button class="btn btn-secondary px-3 py-1.5 text-sm" onclick="updateChart('R_4s')">Regra R₄ₛ</button>
+                    <button class="btn btn-secondary px-3 py-1.5 text-sm" onclick="updateChart('4_1s')">Regra 4₁ₛ</button>
+                    <button class="btn btn-secondary px-3 py-1.5 text-sm" onclick="updateChart('10_x')">Regra 10ₓ</button>
+                </div>
+                <div id="rule-explanation" class="p-4 bg-[#F4F1EA] rounded-lg text-center min-h-[80px] flex items-center justify-center">
+                    <p class="text-gray-700">Selecione uma regra para ver a descrição e o tipo de erro indicado.</p>
+                </div>
+            </div>
+
+            <div class="card p-6 md:p-8 mb-12">
+                <h3 class="text-2xl font-semibold mb-6 text-center">O Ciclo de Melhoria Contínua</h3>
+                <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4 text-center">
+                    <div class="p-4 rounded-lg bg-gray-100 w-full md:w-auto">
+                        <h4 class="font-bold">1. Detecção</h4>
+                        <p class="text-sm">(CQI / CQE)</p>
+                    </div>
+                    <div class="text-2xl text-[#81B29A]">→</div>
+                    <div class="p-4 rounded-lg bg-gray-100 w-full md:w-auto">
+                        <h4 class="font-bold">2. Investigação</h4>
+                        <p class="text-sm">(Causa Raiz)</p>
+                    </div>
+                    <div class="text-2xl text-[#E07A5F]">→</div>
+                    <div class="p-4 rounded-lg bg-gray-100 w-full md:w-auto">
+                        <h4 class="font-bold">3. Ação</h4>
+                        <p class="text-sm">(CAPA)</p>
+                    </div>
+                    <div class="text-2xl text-[#F2CC8F]">→</div>
+                    <div class="p-4 rounded-lg bg-gray-100 w-full md:w-auto">
+                        <h4 class="font-bold">4. Verificação</h4>
+                        <p class="text-sm">(CQI / CQE)</p>
+                    </div>
+                </div>
+                 <p class="text-center text-gray-600 mt-6">Este fluxo transforma a gestão da qualidade de uma atividade reativa em um motor proativo de melhoria, onde falhas detectadas levam a investigações sistemáticas, ações corretivas eficazes e uma verificação final para garantir a resolução permanente do problema.</p>
+            </div>
+            
+            <!-- Framework de Gestão de Riscos -->
+            <div class="card p-6 md:p-8">
+                <h3 class="text-2xl font-semibold mb-6 text-center">Framework de Gestão de Riscos (ISO 15189)</h3>
+                <p class="text-center text-gray-600 mb-8">A ISO 15189 exige uma abordagem proativa para "identificar e mitigar os riscos que afetam a segurança do paciente e a qualidade do resultado". Clique em cada etapa para saber mais.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
+                    <div class="p-4 rounded-lg bg-gray-50 border flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition" onclick="openRiskModal('identification')">
+                        <h4 class="font-bold text-lg">1. Identificação</h4>
+                        <p class="text-sm mt-2 text-gray-600">O que pode dar errado? (Ex: falha de equipamento, erro de amostra, reagente instável).</p>
+                    </div>
+                    <div class="p-4 rounded-lg bg-gray-50 border flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition" onclick="openRiskModal('analysis')">
+                        <h4 class="font-bold text-lg">2. Análise</h4>
+                        <p class="text-sm mt-2 text-gray-600">Qual a probabilidade e o impacto de cada risco na segurança do paciente?</p>
+                    </div>
+                    <div class="p-4 rounded-lg bg-gray-50 border flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition" onclick="openRiskModal('mitigation')">
+                        <h4 class="font-bold text-lg">3. Mitigação</h4>
+                        <p class="text-sm mt-2 text-gray-600">Quais controles implementaremos? (Ex: manutenção preventiva, dupla checagem, POPs).</p>
+                    </div>
+                    <div class="p-4 rounded-lg bg-gray-50 border flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition" onclick="openRiskModal('monitoring')">
+                        <h4 class="font-bold text-lg">4. Monitoramento</h4>
+                        <p class="text-sm mt-2 text-gray-600">Os controles são eficazes? (Ex: análise de indicadores, auditorias, feedback da equipe).</p>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Liderança & Desenvolvimento Section -->
+        <section id="leadership" class="page-content hidden">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold tracking-tight text-[#3D405B]">Liderança & Desenvolvimento de Equipes</h2>
+                <p class="mt-4 text-lg leading-8 text-gray-600 max-w-3xl mx-auto">Estratégias e um plano de ação para cultivar uma equipe técnica de excelência.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                <div class="card p-6">
+                    <h3 class="text-xl font-semibold mb-3 text-[#3D405B]">Estratégias de Liderança</h3>
+                    <ul class="space-y-3 text-gray-600">
+                        <li class="flex items-start">
+                            <span class="text-[#81B29A] mr-3 mt-1">✓</span>
+                            <span><strong class="font-semibold">Comunicação Clara:</strong> Estabeleça canais abertos e garanta que todos entendam os objetivos e prioridades.</span>
+                        </li>
+                        <li class="flex items-start">
+                             <span class="text-[#81B29A] mr-3 mt-1">✓</span>
+                            <span><strong class="font-semibold">Feedback Construtivo:</strong> Realize avaliações de desempenho que reconheçam pontos fortes e guiem melhorias.</span>
+                        </li>
+                        <li class="flex items-start">
+                             <span class="text-[#81B29A] mr-3 mt-1">✓</span>
+                            <span><strong class="font-semibold">Reconhecimento:</strong> Celebre as conquistas da equipe para reforçar o moral e o engajamento.</span>
+                        </li>
+                         <li class="flex items-start">
+                             <span class="text-[#81B29A] mr-3 mt-1">✓</span>
+                            <span><strong class="font-semibold">Propósito Compartilhado:</strong> Conecte as tarefas diárias ao impacto final na saúde do paciente.</span>
+                        </li>
+                    </ul>
+                </div>
+                 <div class="card p-6">
+                    <h3 class="text-xl font-semibold mb-3 text-[#3D405B]">Prioridades de Treinamento</h3>
+                     <ul class="space-y-3 text-gray-600">
+                        <li class="flex items-start">
+                            <span class="text-[#E07A5F] mr-3 mt-1">🎯</span>
+                            <span><strong class="font-semibold">Competências Técnicas:</strong> Novos equipamentos, metodologias e procedimentos.</span>
+                        </li>
+                        <li class="flex items-start">
+                             <span class="text-[#E07A5F] mr-3 mt-1">🎯</span>
+                            <span><strong class="font-semibold">Sistema da Qualidade:</strong> ISO 15189, CAPA, análise de causa raiz e regras de Westgard.</span>
+                        </li>
+                        <li class="flex items-start">
+                             <span class="text-[#E07A5F] mr-3 mt-1">🎯</span>
+                            <span><strong class="font-semibold">Biossegurança:</strong> Manuseio seguro de materiais, uso de EPIs e procedimentos de emergência.</span>
+                        </li>
+                         <li class="flex items-start">
+                             <span class="text-[#E07A5F] mr-3 mt-1">🎯</span>
+                            <span><strong class="font-semibold">Habilidades Comportamentais:</strong> Comunicação, trabalho em equipe e atendimento ao paciente.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card p-6 md:p-8">
+                <h3 class="text-2xl font-semibold mb-6 text-center">Plano de Ação para o RT</h3>
+                <div id="action-plan" class="space-y-4">
+                </div>
+            </div>
+        </section>
+        
+        <!-- Módulos de Estudo Hub Section -->
+        <section id="study" class="page-content hidden">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold tracking-tight text-[#3D405B]">Módulos de Estudo para Capacitação</h2>
+                <p class="mt-4 text-lg leading-8 text-gray-600 max-w-3xl mx-auto">Um currículo completo para o desenvolvimento contínuo do Responsável Técnico. Selecione um módulo para começar.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <div class="card p-6 text-center cursor-pointer" onclick="showStudyModule(1)">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">Módulo 1: Gestão Operacional e Biossegurança</h3>
+                    <p class="text-gray-600">Organize a rotina de triagem, coleta e serviços técnicos, com foco em segurança e conformidade.</p>
+                </div>
+                <div class="card p-6 text-center cursor-pointer" onclick="showStudyModule(2)">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">Módulo 2: Sistema de Gestão da Qualidade (ISO 15189)</h3>
+                    <p class="text-gray-600">Implante e mantenha o SGQ, garantindo a conformidade com as normas e a melhoria contínua.</p>
+                </div>
+                <div class="card p-6 text-center cursor-pointer" onclick="showStudyModule(3)">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">Módulo 3: Controle da Qualidade (CQI e CQE)</h3>
+                    <p class="text-gray-600">Aplique ferramentas de controle interno e externo para assegurar resultados confiáveis.</p>
+                </div>
+                <div class="card p-6 text-center cursor-pointer" onclick="showStudyModule(4)">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">Módulo 4: Gestão de Não Conformidades</h3>
+                    <p class="text-gray-600">Investigue falhas, implemente ações corretivas e represente o laboratório perante a vigilância sanitária.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Study Module 1 Detail Page -->
+        <section id="study-module-1" class="page-content hidden">
+            <button class="btn btn-primary mb-8" onclick="showStudyHub()">← Voltar aos Módulos</button>
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-3xl font-bold mb-2 text-[#3D405B]">Módulo 1 – Gestão Operacional e Biossegurança (10h)</h2>
+                <p class="text-lg text-gray-700 mb-8"><strong>Objetivo:</strong> Capacitar o profissional para organizar a rotina de triagem, coleta e serviços técnicos, com foco em segurança e conformidade.</p>
+                
+                <div class="card p-6 mb-6">
+                    <h3 class="text-2xl font-semibold mb-4">Conteúdo Programático</h3>
+                    <div class="space-y-6">
+                        <div>
+                            <h4 class="text-xl font-bold">1. NR-32: Biossegurança Aplicada a Laboratórios (2h)</h4>
+                            <p class="mt-2"><strong>Objetivo da NR-32:</strong> Regular a segurança e saúde dos trabalhadores da área da saúde, minimizando a exposição a riscos biológicos, químicos, físicos e ergonômicos.</p>
+                            <p class="mt-2"><strong>Principais aspectos abordados:</strong> Equipamentos de Proteção Individual (EPIs), Imunização, Ventilação e Higiene, Sinalização de Riscos.</p>
+                            <p class="mt-2"><strong>Estudo de caso:</strong> Análise de um acidente com risco biológico e como a NR-32 poderia tê-lo prevenido.</p>
+                            <p class="mt-2"><strong>Material complementar:</strong> Manual de Biossegurança (Anvisa), Texto da NR-32 (MTE).</p>
+                        </div>
+                        <hr>
+                        <div>
+                            <h4 class="text-xl font-bold">2. RDC 504/2021: Transporte de Amostras Biológicas (2h)</h4>
+                            <p class="mt-2"><strong>Objetivo da RDC 504/2021:</strong> Estabelecer diretrizes para o transporte seguro de amostras biológicas.</p>
+                            <p class="mt-2"><strong>Conteúdo principal:</strong> Classificação de Amostras, Embalagem, Transporte, Rastreabilidade.</p>
+                            <p class="mt-2"><strong>Atividade de discussão:</strong> Debate sobre o impacto de falhas no transporte.</p>
+                            <p class="mt-2"><strong>Material complementar:</strong> RDC 504/2021 (Anvisa), Manual de Transporte de Amostras (Anvisa).</p>
+                        </div>
+                        <hr>
+                        <div>
+                            <h4 class="text-xl font-bold">3. POPs de Triagem, Coleta e Descarte de Materiais (2h)</h4>
+                            <p class="mt-2"><strong>Objetivo dos POPs:</strong> Padronizar procedimentos para garantir consistência, qualidade e segurança.</p>
+                            <p class="mt-2"><strong>Principais tópicos:</strong> Critérios de aceitação/rejeição de amostras, técnicas de coleta, métodos de descarte seguro.</p>
+                            <p class="mt-2"><strong>Exemplo prático:</strong> Demonstração de coleta e descarte com checklist.</p>
+                            <p class="mt-2"><strong>Material complementar:</strong> Guia de Boas Práticas (SBPC/ML), Manual de Coleta (Anvisa).</p>
+                        </div>
+                        <hr>
+                        <div>
+                            <h4 class="text-xl font-bold">4. Gestão de Equipe: Comunicação e Fluxo Operacional (2h)</h4>
+                            <p class="mt-2"><strong>Objetivo:</strong> Garantir que a equipe opere de maneira coordenada e eficaz.</p>
+                            <p class="mt-2"><strong>Principais tópicos:</strong> Comunicação Eficiente, Divisão de Tarefas, Gestão de Conflitos, Treinamento Contínuo.</p>
+                            <p class="mt-2"><strong>Estudo de caso:</strong> Análise de erro técnico causado por falha de comunicação.</p>
+                            <p class="mt-2"><strong>Material complementar:</strong> Manual de Gestão de Equipe (Ministério da Saúde).</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-6 mb-6">
+                    <h3 class="text-2xl font-semibold mb-4">Atividade Prática (2h)</h3>
+                    <p><strong>Simulação de Coleta e Checklist de Biossegurança:</strong> Os alunos simularão uma coleta de amostra e o descarte correto, aplicando as diretrizes da NR-32 e RDC 504/2021, preenchendo checklists para garantir a conformidade.</p>
+                </div>
+
+                <div class="card p-6">
+                    <h3 class="text-2xl font-semibold mb-4">Metodologia e Avaliação</h3>
+                    <p><strong>Metodologia:</strong> Aulas expositivas, estudos de caso e atividade prática de simulação.</p>
+                    <p class="mt-2"><strong>Avaliação:</strong> Participação nas discussões, correto preenchimento do checklist de biossegurança e prova teórica ao final do módulo.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Study Module 2 Detail Page (Placeholder) -->
+        <section id="study-module-2" class="page-content hidden">
+            <button class="btn btn-primary mb-8" onclick="showStudyHub()">← Voltar aos Módulos</button>
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-3xl font-bold mb-2 text-[#3D405B]">Módulo 2 – Sistema de Gestão da Qualidade (ISO 15189) (10h)</h2>
+                <p class="text-lg text-gray-700 mb-8"><strong>Objetivo:</strong> Implantar e manter o Sistema de Gestão da Qualidade no laboratório, garantindo a conformidade com as normas e assegurando a melhoria contínua.</p>
+                <div class="card p-6"><p>Conteúdo detalhado para este módulo estará disponível em breve.</p></div>
+            </div>
+        </section>
+
+        <!-- Study Module 3 Detail Page (Placeholder) -->
+        <section id="study-module-3" class="page-content hidden">
+            <button class="btn btn-primary mb-8" onclick="showStudyHub()">← Voltar aos Módulos</button>
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-3xl font-bold mb-2 text-[#3D405B]">Módulo 3 – Controle da Qualidade (CQI e CQE) (10h)</h2>
+                <p class="text-lg text-gray-700 mb-8"><strong>Objetivo:</strong> Aplicar ferramentas de controle interno e externo, assegurando resultados confiáveis e a melhoria contínua dos processos laboratoriais.</p>
+                <div class="card p-6"><p>Conteúdo detalhado para este módulo estará disponível em breve.</p></div>
+            </div>
+        </section>
+
+        <!-- Study Module 4 Detail Page (Placeholder) -->
+        <section id="study-module-4" class="page-content hidden">
+            <button class="btn btn-primary mb-8" onclick="showStudyHub()">← Voltar aos Módulos</button>
+            <div class="max-w-4xl mx-auto">
+                <h2 class="text-3xl font-bold mb-2 text-[#3D405B]">Módulo 4 – Gestão de Não Conformidades e Responsabilidade Técnica (10h)</h2>
+                <p class="text-lg text-gray-700 mb-8"><strong>Objetivo:</strong> Treinar a equipe em investigação de falhas, ações corretivas e representação perante a vigilância sanitária, garantindo a conformidade com as normas regulatórias e a qualidade dos processos laboratoriais.</p>
+                <div class="card p-6"><p>Conteúdo detalhado para este módulo estará disponível em breve.</p></div>
+            </div>
+        </section>
+        
+        <!-- Document Hub Section -->
+        <section id="documents" class="page-content hidden">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold tracking-tight text-[#3D405B]">Biblioteca de Documentos e Normas</h2>
+                <p class="mt-4 text-lg leading-8 text-gray-600 max-w-3xl mx-auto">Acesse os textos completos das principais resoluções, normas e manuais que regem a prática laboratorial no Brasil.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                <div class="card p-6 flex flex-col">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">RDC Nº 786/2023</h3>
+                    <p class="text-gray-600 mb-4 flex-grow">Requisitos técnico-sanitários para o funcionamento de Laboratórios Clínicos, Laboratórios de Anatomia Patológica e outros Serviços que executam EAC.</p>
+                    <a href="https://www.in.gov.br/en/web/dou/-/resolucao-rdc-n-786-de-5-de-maio-de-2023-482394228" target="_blank" rel="noopener noreferrer" class="btn btn-primary mt-auto text-center">Acessar Documento</a>
+                </div>
+                <div class="card p-6 flex flex-col">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">RDC Nº 504/2021</h3>
+                    <p class="text-gray-600 mb-4 flex-grow">Dispõe sobre as boas práticas para o transporte de material biológico humano para fins de diagnóstico clínico.</p>
+                    <a href="https://pncq.org.br/wp-content/uploads/2021/06/RDC-504_27-mai-2021.pdf" target="_blank" rel="noopener noreferrer" class="btn btn-primary mt-auto text-center">Acessar PDF</a>
+                </div>
+                <div class="card p-6 flex flex-col">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">Norma Regulamentadora 32</h3>
+                    <p class="text-gray-600 mb-4 flex-grow">Diretrizes para a implementação de medidas de proteção à segurança e à saúde dos trabalhadores dos serviços de saúde.</p>
+                    <a href="https://www.gov.br/trabalho-e-emprego/pt-br/acesso-a-informacao/participacao-social/conselhos-e-orgaos-colegiados/comissao-tripartite-partitaria-permanente/arquivos/normas-regulamentadoras/nr-32-atualizada-2022-2.pdf" target="_blank" rel="noopener noreferrer" class="btn btn-primary mt-auto text-center">Acessar PDF</a>
+                </div>
+                 <div class="card p-6 flex flex-col">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">Manual de Biossegurança</h3>
+                    <p class="text-gray-600 mb-4 flex-grow">Manual da Anvisa com diretrizes de contenção e boas práticas para laboratórios de saúde.</p>
+                    <a href="https://www.gov.br/ebserh-intensifica-assistencia-a-distancia-como-estrategia-de-combate-a-covid-19/pt-br/hospitais-universitarios/regiao-nordeste/hu-ufpi/governanca/documentos-institucionais/manuais/ma-uacap-001_manual_de_biosseguranca_uacap_v3.pdf" target="_blank" rel="noopener noreferrer" class="btn btn-primary mt-auto text-center">Acessar PDF</a>
+                </div>
+                <div class="card p-6 flex flex-col">
+                    <h3 class="text-xl font-semibold mb-2 text-[#3D405B]">RDC Nº 302/2005 (Revogada)</h3>
+                    <p class="text-gray-600 mb-4 flex-grow">Regulamento técnico para funcionamento de laboratórios clínicos, revogado pela RDC 786/2023. Útil para consulta histórica.</p>
+                    <a href="https://bvsms.saude.gov.br/bvs/saudelegis/anvisa/2005/res0302_13_10_2005.html" target="_blank" rel="noopener noreferrer" class="btn btn-secondary mt-auto text-center">Acessar Documento</a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Risk Management Modal -->
+    <div id="riskModal" class="modal-backdrop" onclick="closeRiskModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <span class="modal-close" onclick="closeRiskModal()">&times;</span>
+            <h2 id="modalTitle" class="text-2xl font-bold mb-4 text-[#3D405B]"></h2>
+            <div id="modalBody" class="text-gray-700 space-y-4"></div>
+        </div>
+    </div>
+
+    <script>
+        const pages = document.querySelectorAll('.page-content');
+        const navLinks = document.querySelectorAll('.nav-link');
+        const mobileNav = document.getElementById('mobile-nav');
+
+        function switchTab(pageId, element) {
+            pages.forEach(page => {
+                if (page.id === pageId) {
+                    page.classList.remove('hidden');
+                } else {
+                    page.classList.add('hidden');
+                }
+            });
+
+            const targetLink = element || document.querySelector(`.nav-link[href="#${pageId}"]`);
+            
+            if (targetLink) {
+                navLinks.forEach(link => link.classList.remove('active'));
+                targetLink.classList.add('active');
+            }
+            
+            mobileNav.value = pageId;
+            if(window.location.hash !== `#${pageId}`) {
+                window.location.hash = pageId;
+            }
+        }
+        
+        mobileNav.addEventListener('change', (e) => {
+            switchTab(e.target.value);
+        });
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            const hash = window.location.hash.substring(1);
+            if (hash && document.getElementById(hash)) {
+                if (hash.startsWith('study-module-')) {
+                    const moduleNum = hash.split('-')[2];
+                    showStudyModule(moduleNum);
+                } else {
+                    switchTab(hash);
+                }
+            } else {
+                switchTab('dashboard');
+            }
+            
+            renderRdcAccordion();
+            renderActionPlan();
+            renderWestgardChart();
+        });
+
+        function showStudyModule(moduleNumber) {
+            pages.forEach(page => page.classList.add('hidden'));
+            const modulePage = document.getElementById(`study-module-${moduleNumber}`);
+            if (modulePage) {
+                modulePage.classList.remove('hidden');
+                window.location.hash = `study-module-${moduleNumber}`;
+                // Ensure correct nav link is active
+                navLinks.forEach(link => link.classList.remove('active'));
+                document.querySelector('a[href="#study"]').classList.add('active');
+            }
+        }
+
+        function showStudyHub() {
+            switchTab('study');
+        }
+
+        const rdcData = [
+            {
+                title: "Escopo",
+                rdc302: "Focada em laboratórios clínicos e postos de coleta.",
+                rdc786: "Abrangência expandida para incluir laboratórios de anatomia patológica, toxicologia, entre outros.",
+                impact: "Exige conhecimento e supervisão sobre uma gama mais ampla de especialidades e processos técnicos."
+            },
+            {
+                title: "Classificação de Serviços",
+                rdc302: "Distinção principal entre laboratório clínico e posto de coleta.",
+                rdc786: "Introdução da classificação em Serviço Tipo I (farmácias, consultórios), Tipo II (postos de coleta) e Tipo III (laboratórios).",
+                impact: "Requer a gestão da qualidade em uma rede heterogênea, com diferentes níveis de complexidade e risco."
+            },
+            {
+                title: "Gestão da Qualidade",
+                rdc302: "Exigência de um Manual da Qualidade e controles (interno e externo).",
+                rdc786: "Obrigatoriedade de um Programa de Garantia da Qualidade (PGQ) abrangente e gerenciamento de processos.",
+                impact: "Demanda a implementação de um sistema de gestão da qualidade mais robusto, documentado e integrado."
+            },
+            {
+                title: "Controle de Qualidade Interno (CQI)",
+                rdc302: "Requisitos gerais para o monitoramento da fase analítica.",
+                rdc786: "Nível mais rigoroso, com recomendação de análise de controles a cada corrida de pacientes e análise crítica dos resultados.",
+                impact: "Exige uma rotina de CQI mais intensa, com maior volume de dados para análise e ações corretivas mais ágeis."
+            },
+            {
+                title: "Testes Remotos (Point-of-Care)",
+                rdc302: "Não regulamentado de forma clara; práticas limitadas.",
+                rdc786: "Regulamentação clara para a realização de EAC em farmácias (Tipo I) em caráter de triagem.",
+                impact: "Aumenta a responsabilidade do RT do laboratório central sobre a integridade dos dados de triagem."
+            }
+        ];
+
+        function renderRdcAccordion() {
+            const container = document.getElementById('rdc-accordion');
+            if(!container) return;
+            container.innerHTML = rdcData.map((item, index) => `
+                <div class="border border-gray-200 rounded-lg">
+                    <div class="accordion-header flex justify-between items-center p-4" onclick="toggleAccordion(this)">
+                        <h4 class="font-semibold text-lg">${item.title}</h4>
+                        <span class="transform transition-transform duration-300">▼</span>
+                    </div>
+                    <div class="accordion-content bg-white">
+                        <div class="p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <h5 class="font-bold mb-2 text-gray-700">RDC 302/2005</h5>
+                                <p class="text-gray-600">${item.rdc302}</p>
+                            </div>
+                            <div>
+                                <h5 class="font-bold mb-2 text-[#3D405B]">RDC 786/2023</h5>
+                                <p class="text-gray-800">${item.rdc786}</p>
+                            </div>
+                            <div class="md:col-span-2 mt-2">
+                                <h5 class="font-bold mb-2 text-[#E07A5F]">Impacto sobre o RT</h5>
+                                <p class="text-gray-800">${item.impact}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleAccordion(element) {
+            const content = element.nextElementSibling;
+            const icon = element.querySelector('span');
+            const isExpanded = content.style.maxHeight;
+
+            document.querySelectorAll('#rdc-accordion .accordion-content').forEach(c => c.style.maxHeight = null);
+            document.querySelectorAll('#rdc-accordion .accordion-header span').forEach(i => i.style.transform = 'rotate(0deg)');
+            
+            if (!isExpanded) {
+                content.style.maxHeight = content.scrollHeight + "px";
+                icon.style.transform = 'rotate(180deg)';
+            }
+        }
+        
+        const actionPlanData = [
+            {
+                step: "Passo 1: Domínio da Base Regulatória e Normativa",
+                action: "Realizar um estudo aprofundado e comparativo da RDC 786/2023 e da norma ABNT NBR ISO 15189. Criar um checklist pessoal com os principais requisitos de cada uma."
+            },
+            {
+                step: "Passo 2: Diagnóstico e Análise de Gaps",
+                action: "Conduzir uma auditoria interna ou uma autoavaliação completa dos processos atuais do laboratório em relação aos requisitos identificados no Passo 1. Identificar as lacunas (gaps) entre a prática atual e o padrão exigido."
+            },
+            {
+                step: "Passo 3: Fortalecimento das Ferramentas da Qualidade",
+                action: "Revisar e, se necessário, redesenhar os sistemas de CQI (garantindo a aplicação correta das regras de Westgard), CQE, Análise de Causa Raiz e CAPA. Promover treinamentos práticos para toda a equipe."
+            },
+            {
+                step: "Passo 4: Desenvolvimento da Liderança e da Equipe",
+                action: "Avaliar as próprias competências de liderança. Implementar um calendário de reuniões produtivas, um sistema de feedback e um plano anual de treinamento."
+            },
+            {
+                step: "Passo 5: Engajamento com a Comunidade Profissional",
+                action: "Tornar-se membro ativo da SBPC/ML e/ou da SBAC. Participar de congressos e utilizar as diretrizes publicadas como referência para os POPs do laboratório."
+            }
+        ];
+
+        function renderActionPlan() {
+            const container = document.getElementById('action-plan');
+             if(!container) return;
+            container.innerHTML = actionPlanData.map((item) => `
+                <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <h4 class="font-semibold text-lg text-[#3D405B]">${item.step}</h4>
+                    <p class="mt-2 text-gray-600">${item.action}</p>
+                </div>
+            `).join('');
+        }
+        
+        // --- Westgard Chart Logic ---
+        let westgardChartInstance;
+        const chartMean = 100;
+        const chartSD = 5;
+
+        const chartDataSets = {
+            normal: [102, 98, 100, 104, 97, 101, 99, 103, 96, 102, 98, 100, 101, 97, 103, 99, 104, 95, 101, 98],
+            '1_3s': [102, 98, 100, 104, 97, 101, 99, 103, 96, 116, 98, 100, 101, 97, 103, 99, 104, 95, 101, 98],
+            '2_2s': [102, 98, 100, 104, 97, 101, 99, 103, 96, 102, 98, 100, 101, 97, 111, 112, 104, 95, 101, 98],
+            'R_4s': [102, 98, 100, 104, 97, 101, 99, 103, 96, 102, 111, 89, 101, 97, 103, 99, 104, 95, 101, 98],
+            '4_1s': [102, 98, 100, 104, 97, 101, 99, 103, 96, 102, 98, 106, 107, 108, 106.5, 99, 104, 95, 101, 98],
+            '10_x': [97, 98, 96, 97.5, 98, 96.5, 97, 98.2, 97.8, 96, 97.1, 98, 96, 97, 98, 96.5, 97, 98, 97, 96]
+        };
+
+        const ruleExplanations = {
+            normal: "<strong>Operação Normal:</strong> Os pontos de controle estão distribuídos aleatoriamente em torno da média, dentro dos limites de ±2 DP. Nenhuma ação é necessária.",
+            '1_3s': "<strong>Regra 1₃ₛ:</strong> Um ponto excede ±3 DP. Indica <strong>Erro Aleatório</strong>. A corrida deve ser rejeitada.",
+            '2_2s': "<strong>Regra 2₂ₛ:</strong> Dois pontos consecutivos excedem ±2 DP no mesmo lado da média. Indica <strong>Erro Sistemático</strong>. A corrida deve ser rejeitada.",
+            'R_4s': "<strong>Regra R₄ₛ:</strong> A diferença entre dois pontos consecutivos é maior que 4 DP. Indica <strong>Erro Aleatório</strong> (grande imprecisão). A corrida deve ser rejeitada.",
+            '4_1s': "<strong>Regra 4₁ₛ:</strong> Quatro pontos consecutivos excedem ±1 DP no mesmo lado. Indica um pequeno <strong>Erro Sistemático</strong>. A corrida deve ser rejeitada.",
+            '10_x': "<strong>Regra 10ₓ:</strong> Dez pontos consecutivos estão do mesmo lado da média. Indica <strong>Erro Sistemático</strong>. A corrida deve ser rejeitada."
+        };
+
+        function renderWestgardChart(dataSetKey = 'normal') {
+            const ctx = document.getElementById('westgardChart');
+            if (!ctx) return;
+            const context = ctx.getContext('2d');
+            const data = chartDataSets[dataSetKey];
+            
+            const datasets = [{
+                label: 'Controle Nível 1',
+                data: data,
+                borderColor: '#3D405B',
+                backgroundColor: '#3D405B',
+                pointRadius: 5,
+                pointHoverRadius: 8,
+                fill: false,
+                tension: 0.1
+            }];
+
+            const annotations = [
+                { type: 'line', yMin: chartMean, yMax: chartMean, borderColor: '#81B29A', borderWidth: 2, label: { content: 'Média', enabled: true, position: 'start' } },
+                { type: 'line', yMin: chartMean + chartSD, yMax: chartMean + chartSD, borderColor: '#F2CC8F', borderWidth: 1, borderDash: [5, 5], label: { content: '+1 DP', enabled: true, position: 'start' } },
+                { type: 'line', yMin: chartMean - chartSD, yMax: chartMean - chartSD, borderColor: '#F2CC8F', borderWidth: 1, borderDash: [5, 5], label: { content: '-1 DP', enabled: true, position: 'start' } },
+                { type: 'line', yMin: chartMean + 2 * chartSD, yMax: chartMean + 2 * chartSD, borderColor: '#E07A5F', borderWidth: 1, borderDash: [5, 5], label: { content: '+2 DP', enabled: true, position: 'start' } },
+                { type: 'line', yMin: chartMean - 2 * chartSD, yMax: chartMean - 2 * chartSD, borderColor: '#E07A5F', borderWidth: 1, borderDash: [5, 5], label: { content: '-2 DP', enabled: true, position: 'start' } },
+                { type: 'line', yMin: chartMean + 3 * chartSD, yMax: chartMean + 3 * chartSD, borderColor: 'red', borderWidth: 2, label: { content: '+3 DP', enabled: true, position: 'start' } },
+                { type: 'line', yMin: chartMean - 3 * chartSD, yMax: chartMean - 3 * chartSD, borderColor: 'red', borderWidth: 2, label: { content: '-3 DP', enabled: true, position: 'start' } },
+            ];
+
+            if (westgardChartInstance) {
+                westgardChartInstance.destroy();
+            }
+
+            westgardChartInstance = new Chart(context, {
+                type: 'line',
+                data: {
+                    labels: Array.from({ length: data.length }, (_, i) => `Dia ${i + 1}`),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { min: chartMean - 4 * chartSD, max: chartMean + 4 * chartSD, title: { display: true, text: 'Valor do Controle' } } },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return `Valor: ${context.parsed.y}`; } } }, annotation: { annotations: annotations } }
+                }
+            });
+        }
+        
+        function updateChart(ruleKey) {
+            renderWestgardChart(ruleKey);
+            const explanationEl = document.getElementById('rule-explanation');
+            if (explanationEl) {
+                explanationEl.innerHTML = `<p class="text-gray-700">${ruleExplanations[ruleKey]}</p>`;
+            }
+        }
+        
+        // --- Risk Management Modal Logic ---
+        const riskModalData = {
+            identification: {
+                title: "Etapa 1: Identificação de Riscos",
+                content: `
+                    <p>O objetivo é criar uma lista abrangente de todos os eventos que podem impactar negativamente a segurança do paciente ou a qualidade dos resultados. Envolva toda a equipe neste processo.</p>
+                    <h4 class="font-semibold mt-4 mb-2">Ferramentas e Técnicas:</h4>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><strong>Brainstorming:</strong> Reúna a equipe (recepção, coleta, triagem, técnicos, RT) e pergunte: "O que poderia dar errado em nosso processo?".</li>
+                        <li><strong>Análise de Processos:</strong> Mapeie o fluxo de trabalho (da solicitação do exame à entrega do laudo) e identifique pontos críticos de falha.</li>
+                        <li><strong>Análise de Dados Históricos:</strong> Revise registros de não conformidades, reclamações de clientes, resultados de CQE e incidentes de segurança.</li>
+                        <li><strong>Checklists:</strong> Utilize os requisitos da RDC 786 e ISO 15189 como um guia para identificar possíveis áreas de risco.</li>
+                    </ul>
+                    <h4 class="font-semibold mt-4 mb-2">Exemplos Práticos de Riscos:</h4>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><strong>Fase Pré-analítica:</strong> Identificação incorreta do paciente na coleta; armazenamento da amostra em temperatura inadequada.</li>
+                        <li><strong>Fase Analítica:</strong> Calibração do equipamento vencida; reagente com estabilidade comprometida.</li>
+                        <li><strong>Fase Pós-analítica:</strong> Erro de digitação na liberação do laudo; atraso na comunicação de um resultado crítico.</li>
+                    </ul>
+                `
+            },
+            analysis: {
+                title: "Etapa 2: Análise de Riscos",
+                content: `
+                    <p>Após listar os riscos, o próximo passo é avaliar a importância de cada um. Isso é feito analisando a <strong>probabilidade</strong> de ocorrência e o <strong>impacto (ou severidade)</strong> caso ocorra.</p>
+                    <h4 class="font-semibold mt-4 mb-2">Como Avaliar:</h4>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><strong>Probabilidade:</strong> Quão frequente este evento pode acontecer? (Ex: Raro, Improvável, Possível, Provável, Frequente).</li>
+                        <li><strong>Impacto:</strong> Se acontecer, qual será a consequência para o paciente? (Ex: Insignificante, Menor, Moderado, Grave, Catastrófico).</li>
+                    </ul>
+                    <p class="mt-4">Use uma <strong>Matriz de Risco</strong> para priorizar. Riscos com alta probabilidade e alto impacto (zona vermelha) exigem ação imediata.</p>
+                    <h4 class="font-semibold mt-4 mb-2">Exemplo Prático:</h4>
+                    <p><strong>Risco:</strong> Troca de amostras na triagem.</p>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><strong>Probabilidade:</strong> Possível (se o processo for manual e com alto volume).</li>
+                        <li><strong>Impacto:</strong> Catastrófico (pode levar a diagnóstico e tratamento completamente errados).</li>
+                        <li><strong>Prioridade:</strong> Alta. Ação de mitigação é obrigatória.</li>
+                    </ul>
+                `
+            },
+            mitigation: {
+                title: "Etapa 3: Mitigação de Riscos",
+                content: `
+                    <p>Para os riscos priorizados na etapa de análise, é preciso definir ações para reduzir sua probabilidade ou impacto a um nível aceitável.</p>
+                    <h4 class="font-semibold mt-4 mb-2">Estratégias de Mitigação:</h4>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><strong>Eliminar/Evitar:</strong> Modificar o processo para que o risco não exista mais. (Ex: Automatizar uma etapa manual).</li>
+                        <li><strong>Reduzir a Probabilidade:</strong> Implementar barreiras para dificultar a ocorrência da falha. (Ex: Treinamento da equipe, checklists de verificação, manutenção preventiva de equipamentos).</li>
+                        <li><strong>Reduzir o Impacto:</strong> Implementar controles para detectar a falha antes que ela chegue ao paciente. (Ex: Dupla checagem de resultados, regras de delta check no sistema do laboratório).</li>
+                        <li><strong>Aceitar:</strong> Para riscos de baixa prioridade, pode-se decidir aceitá-los conscientemente, sem implementar novas ações, mas mantendo-os sob observação.</li>
+                    </ul>
+                     <h4 class="font-semibold mt-4 mb-2">Exemplo Prático:</h4>
+                    <p><strong>Risco:</strong> Liberação de um resultado de potássio criticamente alto sem verificação.</p>
+                    <p><strong>Ação de Mitigação:</strong> Configurar um alerta no sistema de interfaceamento que bloqueia a liberação automática de resultados fora dos limites críticos e exige uma confirmação manual do responsável técnico.</p>
+                `
+            },
+            monitoring: {
+                title: "Etapa 4: Monitoramento e Revisão",
+                content: `
+                    <p>A gestão de riscos é um ciclo contínuo, não um evento único. É essencial monitorar a eficácia das ações de mitigação e revisar o plano de riscos periodicamente.</p>
+                    <h4 class="font-semibold mt-4 mb-2">Como Monitorar:</h4>
+                    <ul class="list-disc list-inside space-y-2">
+                        <li><strong>Indicadores de Qualidade:</strong> Acompanhe métricas que reflitam os riscos controlados. (Ex: Taxa de recoleta, número de laudos retificados, tempo de liberação de resultados críticos).</li>
+                        <li><strong>Auditorias Internas:</strong> Verifique se as ações de mitigação estão sendo seguidas pela equipe na prática.</li>
+                        <li><strong>Análise Crítica:</strong> Realize reuniões periódicas (ex: trimestrais) com a liderança e a equipe para revisar a matriz de riscos. Novos riscos podem ter surgido e riscos antigos podem ter mudado de prioridade.</li>
+                        <li><strong>Feedback da Equipe:</strong> Crie uma cultura onde a equipe se sinta segura para reportar "quase-erros" (near misses), que são uma fonte valiosa de informação para a prevenção de riscos.</li>
+                    </ul>
+                    <p class="mt-4">O plano de gestão de riscos é um documento vivo e deve ser atualizado sempre que houver mudanças nos processos, equipamentos ou equipe do laboratório.</p>
+                `
+            }
+        };
+
+        const modal = document.getElementById('riskModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalBody = document.getElementById('modalBody');
+
+        function openRiskModal(riskStep) {
+            if (riskModalData[riskStep]) {
+                modalTitle.innerText = riskModalData[riskStep].title;
+                modalBody.innerHTML = riskModalData[riskStep].content;
+                modal.style.display = 'flex';
+            }
+        }
+
+        function closeRiskModal() {
+            modal.style.display = 'none';
+        }
+
+        // --- Chart.js Plugin Registration ---
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0/dist/chartjs-plugin-annotation.min.js';
+        script.onload = () => {
+            // Chart.js should be available here
+            if (typeof Chart !== 'undefined' && typeof Chart.register === 'function') {
+                 // The annotation plugin might register itself, but explicit is safer
+                if(window.ChartAnnotation) {
+                    Chart.register(window.ChartAnnotation);
+                }
+            }
+            renderWestgardChart(); // Now render the chart
+        };
+        document.head.appendChild(script);
+
+    </script>
+</body>
+</html>
